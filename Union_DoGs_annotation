@@ -1,0 +1,62 @@
+#!/usr/bin/python
+from __future__ import division
+import sys
+import os, time
+import pybedtools
+import pandas as pd
+import numpy as np
+import pysam
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-dog', action='store', dest='DOG', help='DoGs annotation list seperated by ,',type=str)
+parser.add_argument('-out', action='store', dest='OUT', help='Location of union DoGs annotation file ',type=str)
+
+usr_input = parser.parse_args() 
+
+path=usr_input.DOG
+path_out=usr_input.OUT
+
+dog_ann_names=path.split(",")
+
+for k in range(0,len(dog_ann_names)):
+    if  not(os.path.isfile(dog_ann_names[k])):
+        print "No DoG annotation file in : ",dog_ann_names[k]
+        sys.exit()
+
+if path_out is None:
+	print "Error: No -out argument"
+	sys.exit()
+
+if path_out[-1]=='/' and len(path_out)>0:
+	path_out=path_out[:-1]
+
+
+print "\n-----------------------------------------------------Union_DoGs_annotation-------------------------------------------------------------------------"
+print "Output will be at: %s"%(path_out+"/") 
+
+df_ann_annot= pd.DataFrame()
+
+for k in range(0,len(dog_ann_names)):
+    ann_temp=pybedtools.BedTool(dog_ann_names[k]);
+    ann_temp=ann_temp.sort()
+    df_ann_temp=pybedtools.BedTool.to_dataframe(ann_temp);
+    df_ann_temp.columns=range(0,df_ann_temp.shape[1]);
+    df_ann_annot=[df_ann_annot,df_ann_temp]
+    df_ann_annot=pd.concat(df_ann_annot)
+
+trans_annot=pybedtools.BedTool.from_dataframe(df_ann_annot)
+trans_annot=trans_annot.sort()
+merge_annot = trans_annot.merge(c=4,o='distinct',s=True);
+df_merge_annot=pybedtools.BedTool.to_dataframe(merge_annot);
+df_merge_annot.columns=['chrom','start','end','strand','name'];
+df_merge_annot['score']=0;
+df_merge_annot=df_merge_annot[['chrom','start','end','name','score','strand']]
+df_merge_annot['name'] = df_merge_annot['name'].str.replace(',','&')
+
+pybedtools.BedTool.from_dataframe(df_merge_annot).saveas(path_out+"/union_dog_annotation.bed");
+
+print "Done, output file : %s" %(path_out+"/union_dog_annotation.bed")
+
+
+

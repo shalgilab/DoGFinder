@@ -1,0 +1,96 @@
+#!/usr/bin/python
+import pybedtools
+import sys
+import pandas as pd
+import numpy as np
+import argparse
+import os.path
+import commands
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-out', action='store', dest='outpath', help='output dir',type=str)
+parser.add_argument('-gtf', action='store', dest='gtf_files', help='reads file name',type=str)
+parser.add_argument('-suff', action='store', dest='suff_name',default='', help='Suffix to add to output file',type=str)
+
+usr_input = parser.parse_args() 
+output_path=usr_input.outpath
+gtf_list=usr_input.gtf_files
+out_name=usr_input.suff_name
+
+if output_path is None:
+	print "Error: No -out argument"
+	sys.exit()
+if gtf_list is None:
+	print "Error: No -gtf argument"
+	sys.exit()
+
+
+if output_path[-1]=='/'  and len(output_path)>0 :
+	output_path=output_path[:-1]
+
+
+gtf_files_names=gtf_list.split(",")
+if  not(os.path.exists(output_path)):
+    print "No output directory at : ",output_path
+    sys.exit()
+
+if out_name is not '':
+	out_name='_'+out_name
+
+#check bedtools version
+bed_strng=commands.getstatusoutput('bedtools --version')
+version=int(filter(str.isdigit, bed_strng[1]))
+
+if version < 2200:
+	print "bedtools version need to be 2.20.0 or newer"
+	sys.exit()
+
+print "\n-----------------------------------------------------Get Annotation-------------------------------------------------------------------------"
+df_gtf_annot= pd.DataFrame()
+for k in range(0,len(gtf_files_names)):
+    if  not(os.path.isfile(gtf_files_names[k])):
+        print "No GTF file in : ",gtf_files_names[k]
+        sys.exit()
+        
+    gtf_temp=pybedtools.BedTool(gtf_files_names[k]);
+    gtf_temp=gtf_temp.sort()
+    df_gtf_temp=pybedtools.BedTool.to_dataframe(gtf_temp);
+    df_gtf_temp.columns=range(0,df_gtf_temp.shape[1]);
+    df_gtf_annot=[df_gtf_annot,df_gtf_temp]
+    df_gtf_annot=pd.concat(df_gtf_annot)
+    
+
+df_gtf_annot.columns=['seqname', 1, 2, 'start','end','score','strand', 7,8]  
+
+#print "Removing random chromosomes"
+df_gtf_annot=pd.DataFrame(df_gtf_annot.loc[~df_gtf_annot['seqname'].str.contains('random')])
+
+tmp=df_gtf_annot[8].str.split(r'\s*gene_id "\s*').str[1]
+df_gtf_annot['gene_id']=tmp.str.split(r'\s*";\s*').str[0]
+
+tmp2=df_gtf_annot[8].str.split(r'\s*transcript_id "').str[1]
+df_gtf_annot['transcript_id']=tmp2.str.split(r'\s*";\s*').str[0]
+
+df_anot_temp_min=pd.DataFrame(df_gtf_annot.groupby(['transcript_id', 'seqname', 'strand','gene_id','score'], sort=False)['start'].min()).reset_index()
+df_anot_temp_max=pd.DataFrame(df_gtf_annot.groupby(['transcript_id', 'seqname', 'strand','gene_id','score'], sort=False)['end'].max()).reset_index()
+
+df_trans_annot=pd.merge(df_anot_temp_min, df_anot_temp_max, how='inner', on=['transcript_id', 'seqname', 'strand','gene_id','score'])
+
+df_trans_annot=df_trans_annot[['seqname', 'start','end','gene_id','score','strand']]
+
+trans_annot=pybedtools.BedTool.from_dataframe(df_trans_annot)
+trans_annot=trans_annot.sort()
+merge_annot = trans_annot.merge(c=4,o='distinct',s=True);
+
+df_merge_annot=pybedtools.BedTool.to_dataframe(merge_annot);
+
+df_merge_annot.columns=['chrom','start','end','strand','name'];
+df_merge_annot['score']=0;
+df_merge_annot=df_merge_annot[['chrom','start','end','name','score','strand']]
+df_merge_annot['name'] = df_merge_annot['name'].str.replace(',','&')
+
+path_annot_temp="%s/loci_annotation%s.bed" % (output_path,out_name) ;
+
+pybedtools.BedTool.from_dataframe(df_merge_annot).saveas(path_annot_temp);
+print "Done: output:%s \n" %(path_annot_temp)
+

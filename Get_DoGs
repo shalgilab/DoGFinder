@@ -1,0 +1,381 @@
+#!/usr/bin/python
+from __future__ import division
+import pybedtools
+import numpy as np
+import sys
+import pandas as pd
+import itertools
+import os.path
+import argparse
+import DoGs_functions
+import commands
+import pysam
+
+#This program Finds DoGs annotations
+#########################################################################################################################################
+#input:
+parser = argparse.ArgumentParser()
+parser.add_argument('-out', action='store', dest='outpath', help='output dir',type=str)
+parser.add_argument('-bam', action='store', dest='readspath', help='sorted bam file path',type=str)
+parser.add_argument('-a', action='store', dest='annotation', help='Annotation file',type=str)
+parser.add_argument('-s', action='store_true', default=False, dest='strand', help='strand specific, default is False')
+parser.add_argument('-minDoGLen', action='store', dest='mov0', help='First Coverage Length ,default=4000nt', default=4000,type=int)
+parser.add_argument('-minDoGCov', action='store', dest='cov_cut', help='First Coverage Cutoff, default=0.6', default=0.6,type=float)
+parser.add_argument('-w', action='store', dest='window', help='Running window size, default=200nt', default=200,type=int)
+parser.add_argument('-mode', action='store', dest='mode', help='DoGs pipe mode: F: Coverage cutoff on all DoG , W: Coverage cutoff on window, default=F',default='F',type=str, )
+parser.add_argument('-wc', action='store', dest='wind_cut', help='DoGs end cutoff, relevant for W mode, default=0.2', default=0.2,type=float)
+parser.add_argument('-suff', action='store', dest='suff_name',default='', help='Suffix to add to output file',type=str)
+parser.add_argument('-max', action='store', dest='max_dog', help='Maximum DoGs length',type=int)
+#parser.add_argument('-N', action='store_true', default=False, dest='new_old', help='Advanced: for Dog run over gene mode, default is False')
+parser.add_argument('-Mds', action='store', dest='min_gene_ds', help='Advanced: Min distance to DS gene,default=FCL', type=int)
+
+usr_input = parser.parse_args() 
+mov0= usr_input.mov0 
+path_reads_to_run_pipe_on=usr_input.readspath 
+output_path=usr_input.outpath
+path_annotation=usr_input.annotation
+out_name=usr_input.suff_name
+S=usr_input.strand
+max_dog_length_usr=usr_input.max_dog
+#new_old=usr_input.new_old
+mode=usr_input.mode
+cov_cut= usr_input.cov_cut #Coverage on mov0 DS value lower that this will be filtered out
+interval= usr_input.window #running window size
+wind_cut=usr_input.wind_cut #coverage value to find end of DoG for running window size
+min_dog=usr_input.min_gene_ds;
+window=int(interval);
+mov0=int(mov0);
+new_old=False
+if min_dog is None:
+	min_dog=int(mov0);
+if output_path is None:
+	print "Error: No -out argument"
+	sys.exit()
+if path_reads_to_run_pipe_on is None:
+	print "Error: No -bam argument"
+	sys.exit()
+if path_annotation is None:
+	print "Error: No -a argument"
+	sys.exit()
+
+if output_path[-1]=='/' and len(output_path)>0:
+	output_path=output_path[:-1]
+bam_files_dir=os.path.dirname(os.path.abspath(path_reads_to_run_pipe_on))
+#check bedtools version
+bed_strng=commands.getstatusoutput('bedtools --version')
+version=int(filter(str.isdigit, bed_strng[1]))
+if  not(os.path.isfile(path_annotation)):
+    print "No annotation file in : ",path_annotation
+    sys.exit()
+if  not(os.path.exists(output_path)):
+    print "No output directory at : ",output_path
+    sys.exit()
+if  not(os.path.isfile(path_reads_to_run_pipe_on)):
+    print "No reads file in : ",path_reads_to_run_pipe_on
+    sys.exit()
+
+if out_name is not '':
+	out_name='_'+out_name
+
+base_name=os.path.basename(path_reads_to_run_pipe_on)
+bed_name_s=bam_files_dir+"/"+base_name.split(".bam")[0]+"_sorted.bed"
+bed_name=bam_files_dir+"/"+base_name.split(".bam")[0]+".bed"
+
+bed_name_s_non=bam_files_dir+"/"+base_name.split(".bam")[0]+"_no_gene_sorted.bed"
+bed_name_non=bam_files_dir+"/"+base_name.split(".bam")[0]+"_no_gene.bed"
+print "\n-----------------------------------------------------Get DoGs-------------------------------------------------------------------------"
+print "\nPath of reads to run pipe on: %s "%(path_reads_to_run_pipe_on)
+print "Annotation file: %s "%(path_annotation)
+print "output will be at: %s/"%(output_path)
+if mode=='F':
+	wind_cut=cov_cut;
+	print "\nMode is -F: Coverage on total DoG length"
+elif mode=='W':
+	print "\nMode is -W: Coverage on window"
+else :
+	print "\nIlligal input: ",mode
+	sys.exit()
+print "Paremeters: First coverage on: %snt, First coverage cutoff: %s, Running window size: %snt, DoGs end cutoff: %s"%(str(mov0),str(cov_cut),str(interval),str(wind_cut))
+
+if S:
+	print "Strand specific \n"
+else:
+	print "Not Strand specific \n"
+if new_old:
+	print "New mode \n"
+
+################################################################################################################
+##create genome file
+
+if  not(os.path.isfile(path_reads_to_run_pipe_on+".bai")):
+	print "No index file: %s ....creating one" %(path_reads_to_run_pipe_on+".bai")
+	pysam.index(path_reads_to_run_pipe_on)
+else :
+	print "Found index file: %s" %(path_reads_to_run_pipe_on+".bai")
+idx_stat = pysam.idxstats(path_reads_to_run_pipe_on)
+stat_string=idx_stat.split("\n")
+stat_string=stat_string[:-2]
+df_genome=pd.DataFrame(stat_string)
+df_genome['chrom'], df_genome['length'], df_genome['mapped_reads'], df_genome['non'] = zip(*df_genome[0].map(lambda x: x.split('\t')))
+df_genome=df_genome[['chrom','length']]
+genome=df_genome
+chr_list_genom=set(df_genome.chrom.drop_duplicates().tolist())
+
+
+genome.columns=range(0,len(genome.columns))
+#genome_path=output_path+'/genome.txt'
+genome_path=output_path+'/'+base_name.split(".bam")[0]+'_'+'genome.txt'
+df_genome.to_csv(genome_path, header=None, index=None, sep='\t')
+###############################################################################################################
+##Load data:
+
+annot = pybedtools.BedTool(path_annotation);
+#annot =annot.sort()
+df_annotation=pybedtools.BedTool.to_dataframe(annot)
+# adding serial number to luci for uniqueness
+df_suff = pd.DataFrame(range(0,len(df_annotation)), dtype='str')
+df_annotation['name']=df_annotation['name'].astype(str)+'%'+df_suff[0].astype(str)
+df_annotation=df_annotation.set_index(df_annotation['name'])
+chr_list_ann=set(df_annotation.chrom.drop_duplicates().tolist())
+if len(chr_list_genom)!=len(chr_list_ann):
+	print 'Warning: chromosom in genome and loci dont match :%s\n'%(list(chr_list_ann-chr_list_genom))	
+	df_annotation=df_annotation[~df_annotation['chrom'].isin(list(chr_list_ann-chr_list_genom))]
+
+df_annotation=pd.DataFrame(df_annotation.loc[~df_annotation['chrom'].str.contains('chrM')])
+
+annot =pybedtools.BedTool.from_dataframe(df_annotation)
+annot =annot.sort(faidx=genome_path)
+os.remove(genome_path)
+
+reads_for_pipe = pybedtools.BedTool(path_reads_to_run_pipe_on);
+
+##########################################################################################################
+##Removing genic reads and/or sorting for new mode
+
+
+if (new_old) :
+	print "New mode: Transforming bam to sorted bed"
+	if not(os.path.isfile(bed_name_s)):
+		print "Couldn't find bed file so creating: %s ....may take some time\n" %(bed_name_s)
+		print "bam_to_bed"
+		reads_out=pybedtools.BedTool.bam_to_bed(reads_for_pipe,split=True).saveas(bed_name);
+		sort_cmd="sort -k1,1 -k2,2n %s > %s" %(bed_name,bed_name_s)
+		print sort_cmd
+		os.system(sort_cmd)				
+		reads_for_pipe=pybedtools.BedTool(bed_name_s);
+	else:
+		print "Found bed file in dir: %s\n" %(bed_name_s)
+		reads_for_pipe=pybedtools.BedTool(bed_name_s);
+else :
+	print "Searching for non genic reads file in %s "%(bam_files_dir)
+	if not(os.path.isfile(bed_name_s_non)):
+		print "Couldn't find non_genic bed file so creating: %s ....may take some time\n" %(bed_name_s_non)
+		if version > 2200:
+			print "Removing genic reads..."
+			reads_for_pipe=reads_for_pipe.intersect(annot,v=True,s=S,split=True);
+			reads_out=pybedtools.BedTool.bam_to_bed(reads_for_pipe,split=True).saveas(bed_name_non);
+			print "sorting..."
+			sort_cmd="sort -k1,1 -k2,2n %s > %s" %(bed_name_non,bed_name_s_non);
+			os.system(sort_cmd)
+			reads_out=pybedtools.BedTool(bed_name_s_non);
+			os.remove(bed_name_non)
+		else:
+			print "Removing genic reads..."
+			reads_for_pipe=reads_for_pipe.intersect(annot,v=True,s=S,abam=True,split=True);
+			reads_out=pybedtools.BedTool.bam_to_bed(reads_for_pipe,split=True).saveas(bed_name_non);
+			print "sorting..."
+			sort_cmd="sort -k1,1 -k2,2n %s > %s" %(bed_name_non,bed_name_s_non);
+			os.system(sort_cmd)
+			reads_out=pybedtools.BedTool(bed_name_s_non);
+			os.remove(bed_name_non)
+		reads_for_pipe=reads_out;
+	else:
+		print "Found non_genic bed file in dir: %s\n" %(bed_name_s_non)
+		del reads_for_pipe
+		reads_for_pipe=pybedtools.BedTool(bed_name_s_non);
+
+
+
+##########################################################################################################
+##nearest neighbor filtering out those genens that are within first coverage window:
+mov=mov0
+#transform genome to annotation
+zero_genome = pd.DataFrame(np.zeros((len(genome)*4, 1)))
+pos_strand = list(itertools.repeat("+", len(genome)*2))
+neg_strand = list(itertools.repeat("-", len(genome)*2))
+strand = pd.concat([pd.DataFrame(pos_strand), pd.DataFrame(neg_strand)])
+strand = strand.reset_index(drop=True)
+genome_end = pd.concat([genome[1], pd.DataFrame(np.zeros((len(genome), 1))),genome[1], pd.DataFrame(np.zeros((len(genome), 1)))])
+genome_end = genome_end.reset_index(drop=True)
+chrom = pd.concat([genome[0], genome[0],genome[0], genome[0]])
+chrom = chrom.reset_index(drop=True)
+df_genom = pd.concat([chrom, genome_end,genome_end, chrom,zero_genome ,strand],axis=1)
+df_genom.columns=['chrom','start','end','name','score','strand']
+df_genom.start = df_genom.start.astype(int)
+df_genom.end = df_genom.end.astype(int)
+df_genom.score = df_genom.score.astype(int)
+df_genom['end']=df_genom['end']+1
+
+df_annot_for_ends = pd.concat([df_annotation,df_genom],ignore_index=True)
+
+
+annot_for_ends=pybedtools.BedTool.from_dataframe(df_annot_for_ends)
+annot_for_ends=annot_for_ends.sort()
+nearby_list = annot_for_ends.closest(annot_for_ends, D='a', s=True,io=True, iu=True )
+nearby_list_opp = annot_for_ends.closest(annot_for_ends, D='a', S=True,io=True, iu=True )
+nearby_list_df=pybedtools.BedTool.to_dataframe(nearby_list,names=range(0,13));
+nearby_list_df_opp=pybedtools.BedTool.to_dataframe(nearby_list_opp,names=range(0,13));
+
+chr_list=df_annot_for_ends.chrom.drop_duplicates().tolist()
+
+df_nearby_list=nearby_list_df[~nearby_list_df[3].isin(chr_list)]
+df_nearby_list_opp=nearby_list_df_opp[~nearby_list_df_opp[3].isin(chr_list)]
+df_dist_from_neighbor=pd.DataFrame(df_nearby_list[12],dtype='int')
+df_dist_from_neighbor_opp=pd.DataFrame(df_nearby_list_opp[12],dtype='int')
+
+df_dist_from_neighbor=df_dist_from_neighbor.set_index(df_nearby_list[3])
+df_dist_from_neighbor_opp=df_dist_from_neighbor_opp.set_index(df_nearby_list_opp[3])
+
+if S :
+	df_max_dog_length=pd.DataFrame(df_dist_from_neighbor,dtype='int')
+	df_max_dog_length=df_max_dog_length.set_index(df_dist_from_neighbor.index.values)
+	df_max_dog_length.columns=['size'];
+	df_max_dog_length[df_max_dog_length['size']==-1]=10000000000000000
+else :
+	df_max_dog_length=pd.DataFrame(df_dist_from_neighbor,dtype='int')
+	df_max_dog_length_opp=pd.DataFrame(df_dist_from_neighbor_opp,dtype='int')
+	df_max_dog_length=df_max_dog_length.set_index(df_dist_from_neighbor.index.values)
+	df_max_dog_length_opp=df_max_dog_length_opp.set_index(df_dist_from_neighbor_opp.index.values)
+	df_max_dog_length.columns=['size_same'];
+	df_max_dog_length['size_opp']=df_max_dog_length_opp;
+	df_max_dog_length['size']=df_max_dog_length[['size_same','size_opp']].min(axis=1)
+	df_max_dog_length=df_max_dog_length[['size']];
+	df_max_dog_length[df_max_dog_length['size']==-1]=10000000000000000
+
+#print "Filter out %s from %s DoGs candidates that have genes %snt down stream to them \n"%(str(len(df_dist_from_neighbor[df_dist_from_neighbor[12]<min_dog])),str(len(df_dist_from_neighbor)),str(min_dog))
+
+
+df_dist_from_neighbor=pd.DataFrame(df_max_dog_length[df_max_dog_length['size']>=min_dog])
+
+df_dist_from_neighbor.loc[df_dist_from_neighbor['size']>=mov0,'size']=mov0
+
+df_dist_from_neighbor.columns=[12]
+
+
+#########################################################################################
+## flank annotation mov0 DS:
+
+df_new_ann=pd.DataFrame(df_annotation.loc[df_dist_from_neighbor.index]);
+
+df_new_ann=df_new_ann.set_index([df_dist_from_neighbor.index]);
+moving_window_size_ds=pd.concat([df_new_ann,df_dist_from_neighbor],axis=1,join_axes=[df_dist_from_neighbor.index]);
+
+#+strand
+df_new_ann.loc[df_new_ann['strand']=='+','start']=df_new_ann.loc[df_new_ann['strand']=='+','end']
+df_new_ann.loc[df_new_ann['strand']=='+','end']=df_new_ann.loc[df_new_ann['strand']=='+','end']+moving_window_size_ds.loc[moving_window_size_ds['strand']=='+',12]
+
+#-strand
+df_new_ann.loc[df_new_ann['strand']=='-','end']=df_new_ann.loc[df_new_ann['strand']=='-','start']
+df_new_ann.loc[df_new_ann['strand']=='-','start']=df_new_ann.loc[df_new_ann['strand']=='-','end']-moving_window_size_ds.loc[moving_window_size_ds['strand']=='-',12]
+
+
+flank_mov=pybedtools.BedTool.from_dataframe(df_new_ann)
+flank_mov_sort=flank_mov.sort();
+###############################################################################################
+
+print "First coverage..."
+
+if version > 2240:
+	cov_temp=flank_mov_sort.coverage(reads_for_pipe,sorted=True,s=S);
+else:
+	cov_temp=reads_for_pipe.coverage(flank_mov_sort,sorted=True,s=S);
+
+if len(cov_temp)==0:
+	print "\nNo DoGs Found"
+	sys.exit()
+df = pybedtools.BedTool.to_dataframe(cov_temp);
+df = df.reset_index(drop=True)
+df.columns = range(0,len(df.columns))
+
+#Filter coverage larger than cov_cut
+
+new=df[(df[9] > cov_cut) & (df[1]>0) & (df[2]>0)];
+#create new annotation file:
+new_ann=new.iloc[:,[0,1,2,3,4,5]];
+new_ann=new_ann.set_index(new_ann[3])
+
+del cov_temp,df,flank_mov_sort,flank_mov,df_new_ann
+
+max_dog_length=int(25000*interval/200);
+zero_ref=0;
+Final_DoGs_df=pd.DataFrame();
+start_number=len(new_ann);
+max_id=int(max_dog_length/window)
+max_id_k=-1;
+#####################################################################################################
+#Start loop:
+print "Number of DoGs found : ",len(new_ann)
+print "Elongating DoGs to find DoGs end...\n"
+first_len=len(new_ann)
+while len(new_ann)>0:
+	if (zero_ref+max_dog_length+mov0 >= max_dog_length_usr) and max_dog_length_usr is not None:
+		max_id_k=int(zero_ref+max_dog_length+mov0-max_dog_length_usr/window)
+	if mode=='F':
+		df_DoG_annotation_combine_windows=DoGs_functions.Create_cov_annotation_tot( window, new_ann,zero_ref,max_dog_length);
+	else:
+		df_DoG_annotation_combine_windows=DoGs_functions.Create_cov_annotation( window, new_ann,zero_ref,max_dog_length);		
+	annotation_combine_windows=pybedtools.BedTool.from_dataframe(df_DoG_annotation_combine_windows);
+	annotation_combine_windows=annotation_combine_windows.sort();
+
+	if version > 2240:
+		annotation_combine_windows_cov=annotation_combine_windows.coverage(reads_for_pipe,sorted=True,s=S)
+	else:
+		annotation_combine_windows_cov=reads_for_pipe.coverage(annotation_combine_windows,sorted=True,s=S)
+	if (len(annotation_combine_windows)-len(annotation_combine_windows_cov))>0:
+		print "Memory problem with bedtools coverage missing",len(annotation_combine_windows)-len(annotation_combine_windows_cov),"rows"
+	
+	df_annotation_combine_windows_coverage = pybedtools.BedTool.to_dataframe(annotation_combine_windows_cov);
+
+	df_annotation_combine_windows_coverage = df_annotation_combine_windows_coverage.reset_index(drop=True);
+	df_annotation_combine_windows_coverage.columns = range(0,len(df_annotation_combine_windows_coverage.columns));
+	df_annot_next,df_DoGs_end_annotations=DoGs_functions.DoGs_annotation(df_annotation_combine_windows_coverage,window,wind_cut,df_annotation,moving_window_size_ds,new_ann,zero_ref,df_max_dog_length,new_old,max_id_k,max_id)
+		
+	if len(df_DoGs_end_annotations)>0:
+		df_DoGs_end_annotations = df_DoGs_end_annotations.reset_index(drop=True)
+    		df_DoGs_end_annotations.columns = range(0,len(df_DoGs_end_annotations.columns))
+		Final_DoGs_df=[Final_DoGs_df,df_DoGs_end_annotations]
+		Final_DoGs_df = pd.concat(Final_DoGs_df)
+	zero_ref=int(zero_ref+max_dog_length)
+	new_ann=df_annot_next;
+	del df_annot_next,df_DoGs_end_annotations,df_annotation_combine_windows_coverage,annotation_combine_windows_cov,annotation_combine_windows,df_DoG_annotation_combine_windows
+	if len(new_ann)>0:
+		print "Elongating %s DoGs"%(str(len(new_ann)))
+
+##################################################################################################
+## Creating final file:
+if first_len >0: 
+	Final_DoGs_df[1] = Final_DoGs_df[1].astype(int)
+	Final_DoGs_df[2] = Final_DoGs_df[2].astype(int)
+
+	Final_DoGs_df['names_non_id'], Final_DoGs_df['serialid'] = zip(*Final_DoGs_df[3].map(lambda x: x.split('%')))
+
+	Final_DoGs_df['DoG_length']=Final_DoGs_df.iloc[:,2]-Final_DoGs_df.iloc[:,1]
+
+	Mean=Final_DoGs_df['DoG_length'].mean()
+	Mean=int(Mean)
+	print "Average DoGs length: %s"%(str(Mean))
+
+	Final_DoGs_df=Final_DoGs_df[[0,1,2,'names_non_id',4,5]]	
+
+	path_dog_annot_temp="%s/Final_Dog_annotation%s.bed" % (output_path,out_name) ;
+	pybedtools.BedTool.from_dataframe(Final_DoGs_df).saveas(path_dog_annot_temp);
+
+	print "\nDone: output file will be: ",path_dog_annot_temp
+	print "\n"
+	
+else:
+	print "\nNo DoGs Found"
+
+
+
+

@@ -1,0 +1,205 @@
+#!/usr/bin/python
+from __future__ import division
+import argparse
+import pysam
+import os.path
+import commands
+import subprocess
+import numpy
+import sys
+import DoGs_functions
+from multiprocessing import Lock, Process, Queue, current_process, cpu_count
+
+
+
+
+def do_job(tasks_to_accomplish,tasks_out_count,tasks_out_names,tasks_out_PE,tasks_out_strand):    
+	while not(tasks_to_accomplish.empty()):
+		task = tasks_to_accomplish.get()
+		func = task[0]
+		args = task[1:]
+		reads_count_0,bam_names,PE,strand=func(*args)
+		tasks_out_count.put(reads_count_0)
+		tasks_out_names.put(bam_names)
+		tasks_out_PE.put(PE)
+		tasks_out_strand.put(strand)
+	return True
+
+def myfunc(bam_files_names,ref_ann,output_path,index):
+	PE,strand=DoGs_functions.Examine_bam(bam_files_names,ref_ann)
+	out_name=DoGs_functions.PE_Mod(PE,strand,bam_files_names,output_path)
+	reads_count_0=DoGs_functions.count_reads(out_name,output_path)
+	return reads_count_0,out_name,PE,strand
+
+def myfunc2(k,bam_names_new,output_path,reads_min_count):
+
+
+	DoGs_functions.Downsample(k,bam_names_new,output_path,reads_min_count)
+	base_name=os.path.basename(bam_names_new)    
+	path_new_sort=output_path+"/"+base_name.split(".bam")[0]+".sorted_DS.bam";
+	c_ds=DoGs_functions.count_reads(path_new_sort,output_path)
+	return c_ds,path_new_sort,k,k
+
+
+def main():
+
+#This program Modify paired end bam file 
+	parser = argparse.ArgumentParser()
+	parser.add_argument('-bam', action='store', dest='readspath', help='list of bam files seperated by , ',type=str)
+	parser.add_argument('-ref', action='store', dest='ref', help='Reference .bed annotation file for strandness check (can be loci_annotation.bed file)',type=str)
+	parser.add_argument('-Q', action='store', dest='core', help='Core number usage', default=1,type=int)
+	parser.add_argument('-out', action='store', dest='out', help='list of output path seperated by ,',type=str)
+
+	usr_input = parser.parse_args() 
+	path_bam=usr_input.readspath 
+	ref_ann=usr_input.ref
+	cores=usr_input.core
+	out_list=usr_input.out
+
+	bam_files_names=path_bam.split(",")
+	out_path=out_list
+	if out_path is not None:
+		out_list=out_path.split(",")
+		if len(out_list)!=len(bam_files_names):
+			print "Error: out list doesn't match bam list length"
+			sys.exit()
+		for k in range(0,len(out_list)):
+			if  not(os.path.exists(out_list[k])):
+				print "No output directory at : ",out_list[k]
+				sys.exit()
+	
+	if path_bam is None:
+		print "Error: No -bam argument"
+		sys.exit()
+	
+	if ref_ann is None:
+		print "Error: No -ref argument"
+		sys.exit()
+
+	sam_strng=commands.getstatusoutput('samtools')
+	temp=sam_strng[1].split("Version:")[1][:7]
+	sam_version=int(filter(str.isdigit, temp))
+
+	for k in range(0,len(bam_files_names)):
+	    if  not(os.path.isfile(bam_files_names[k])):
+	        print "No reads file in : ",bam_files_names[k]
+	        sys.exit()
+
+
+	print "\n-----------------------------------------------------Pre_Process-------------------------------------------------------------------------"
+	print "Ref. file: %s"%(ref_ann) 
+	print "Cores available: %s Cores usage: %s"%(str(cpu_count()),str(cores)) 
+
+
+#	reads_count = [None] * len(bam_files_names)
+#	bam_names = [None] * len(bam_files_names)
+	tasks_to_accomplish = Queue()
+	tasks_out_count = Queue()
+	tasks_out_names = Queue()
+	tasks_out_PE = Queue()
+	tasks_out_strand = Queue()
+	a=bam_files_names
+############################################################################### PE    
+       #building queue for all processes:
+	print "Processing and counting bam files... " 
+	for i in range(0,len(a)):
+		if out_path is not None:
+			tmp_out=out_list[i]
+		else :			
+			output_path=os.path.split(bam_files_names[i])
+			tmp_out=output_path[0]
+
+		if tmp_out=='':
+			nnn=os.path.dirname(os.path.abspath(bam_files_names[i]))
+		else:
+			nnn=tmp_out
+
+		tasks_to_accomplish.put((myfunc,a[i],ref_ann,nnn,i))
+        
+	processes = []
+    
+    # creating processes
+	for w in range(cores):
+		p = Process(target=do_job, args=(tasks_to_accomplish,tasks_out_count,tasks_out_names,tasks_out_PE,tasks_out_strand,))
+		processes.append(p)
+		p.start()
+   
+	for p in processes:
+		p.join()
+
+	reads_count=[]
+	bam_names=[]
+	tmp=tasks_out_count.qsize()
+	while tmp< len(a):
+		tmp=tasks_out_count.qsize()
+
+	for items in range(0, tasks_out_count.qsize()):
+		st=tasks_out_strand.get()
+		PP=tasks_out_PE.get()
+		na=tasks_out_names.get()
+		cc=tasks_out_count.get()
+		reads_count.append(cc)
+		bam_names.append(na)
+		if st=='non':
+			st='Not stranded,'
+		else:
+			st='Leading strand is: '+st+','
+
+		if PP=='False':
+			PP='Not Paired-End,'
+		else:
+			PP='Paired-Ended,'
+		print na+" : "+PP+" "+st+" with "+str(cc)+" mapped Mreads"
+
+	if len(bam_names)<=1:
+		print 'Only one bam file, No need to downsample...exiting'
+	        sys.exit()
+############################################################################### Downsampling
+	reads_min_count=min(reads_count)
+	loc=reads_count.index(min(reads_count))
+	bam_names_new=bam_names
+
+	print "Bam file: %s has smallest number of mapped reads: %s Mreads " %(bam_names_new[loc],str(reads_min_count))
+	print "Downsampling... " 
+	a=bam_names_new
+	tasks_to_accomplish = Queue()
+	tasks_out_count = Queue()
+	tasks_out_names = Queue()
+	tasks_out_PE = Queue()
+	tasks_out_strand = Queue()
+
+	for i in range(0,len(a)):
+		output_path=os.path.split(bam_names_new[i])
+		if output_path[0]=='':
+			nnn=os.path.dirname(os.path.abspath(bam_names_new[i]))
+		else:
+			nnn=output_path[0]
+
+		tasks_to_accomplish.put((myfunc2,i,a[i],nnn,reads_min_count))
+        
+	processes = []
+
+	for w in range(cores):
+		p = Process(target=do_job, args=(tasks_to_accomplish,tasks_out_count,tasks_out_names,tasks_out_PE,tasks_out_strand,))
+		processes.append(p)
+		p.start()
+   
+	for p in processes:
+		p.join()
+	tmp=tasks_out_count.qsize()
+	while tmp< len(a):
+		tmp=tasks_out_count.qsize()
+
+	for items in range(0, tasks_out_count.qsize()):
+
+		na=tasks_out_names.get()
+		cc=tasks_out_count.get()
+
+
+		print na+" : after downsample "+str(cc)+" mapped Mreads"
+	return True
+
+if __name__ == '__main__':
+	main()
+
+	print "Done " 
