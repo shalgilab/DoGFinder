@@ -137,7 +137,7 @@ df_suff = pd.DataFrame(range(0,len(df_annotation)), dtype='str')
 df_annotation['name']=df_annotation['name'].astype(str)+'%'+df_suff[0].astype(str)
 df_annotation=df_annotation.set_index(df_annotation['name'])
 chr_list_ann=set(df_annotation.chrom.drop_duplicates().tolist())
-if len(chr_list_genom)!=len(chr_list_ann):
+if len(list(chr_list_ann-chr_list_genom))>0:
 	print 'Warning: chromosom in genome and loci dont match :%s\n'%(list(chr_list_ann-chr_list_genom))	
 	df_annotation=df_annotation[~df_annotation['chrom'].isin(list(chr_list_ann-chr_list_genom))]
 
