@@ -77,7 +77,7 @@ Pre_Process -Q 3 -bam rawdata/bam_control1.bam,rawdata/bam_control2.bam,rawdata/
 
 ##### Output: 
 Processed read files, to be used as input for Get_DoGs: rawdata/bam_control1.sorted_DS.bam,rawdata/ bam_control2.sorted_DS.bam,...
-The files will be located at the same folder where the original bam files located
+The output raw and downsampled files will be located at the same folder as the original bam files
 Note: if you have paired-end bam file, the out file will have PE in his name
 ##### Note: This step may take long time
 
@@ -149,7 +149,7 @@ Common_DoGs_annotation -comm Dog_annotation_replicate1.bed,Dog_annotation_replic
 
 **-out**: output Dir.
 
-##### Output:
+##### Output: 
  /outdir/common_dog_annotation.bed
 
 #### Step 5: Get_DoGs_rpkm
@@ -168,7 +168,7 @@ Get_DoGs_rpkm -out /outdir -bam my_sorted_bam_DS.bam -s -dog Final_Dog_annotatio
 **-s**: OPTIONAL. Flag is true if your library is strand specific. Default is False. 
 
 ##### Output: 
-/outdir/DoGs_rpkm_table.csv
+.csv table of DoGs and their RPKM, located at: /outdir/DoGs_rpkm_table.csv
 
 
 
