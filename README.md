@@ -9,7 +9,9 @@ DoGFinder-1.0.0
 ### Prerequisites
 1. Bedtools: version  2.20.0 or later
 2. samtools
-3. python with setuptools
+3. python 2  with setuptools
+
+Note: DoGFinder uses RSeQC, hence it must be run in python 2
 
 You should be able to run bedtools and samtools commands from command prompt
 
@@ -75,6 +77,8 @@ Pre_Process -Q 3 -bam rawdata/bam_control1.bam,rawdata/bam_control2.bam,rawdata/
 
 ##### Output: 
 Processed read files, to be used as input for Get_DoGs: rawdata/bam_control1.sorted_DS.bam,rawdata/ bam_control2.sorted_DS.bam,...
+The files will be located at the same folder where the original bam files located
+Note: if you have paired-end bam file, the out file will have PE in his name
 ##### Note: This step may take long time
 
 ####  Step 3: Get_DoGs
@@ -244,4 +248,3 @@ DoG_name chromosome start end DoG_length strand DoG_rpkm
 ENSMUST00000015800&ENSMUST00000082857&ENSMUST00000083424&ENSMUST00000101927&ENSMUST00000117557&ENSMUST00000117870&ENSMUST00000127699&ENSMUST00000133964&ENSMUST00000138895&ENSMUST00000140984&ENSMUST00000149936&ENSMUST00000153847&NM_031165&uc009ozx.2&uc009ozy.2&uc009ozz.1 chr9 40613283 40679683,66400 + 7249.06668929
 ```
 These csv (tab-delimited) files can be further processed or opened in excel, MATLAB , etc. 
-
