@@ -58,10 +58,14 @@ Get_loci_annotation -out /annotationdir -gtf ucsc_gtf_file.gtf,refseq_gtf_file.g
 
 ##### Output: 
 Annotation file: loci_annotation.bed, to be used as input for Get_DoGs
-##### Note: we provided ready to use annotation files for human and mouse, see annotation below.
 
-####  Step 2: Pre_Process
+Note: we provided ready to use annotation files for human and mouse, see annotation below.
+
+####  Step 2: Pre_Process 
 Preprocessing and downsampling of RNA-seq bam files. (Run this command before Get_DoGs)
+
+Note: The downsample is performed in a psuedorandom way, if you wand to reproduce the same data again you should keep the order of the input bam as was in the original run.
+
 ##### Command example:	 
 ```
 Pre_Process -Q 3 -bam rawdata/bam_control1.bam,rawdata/bam_control2.bam,rawdata/bam_HS1.bam -ref loci_annotation.bed
@@ -192,9 +196,9 @@ You will get the loci_annotation.bed file with Hspa8 annotation constructed from
 chr9	40609067	40613283	ENSMUST00000015800&ENSMUST00000082857&ENSMUST00000083424&ENSMUST00000101927&ENSMUST00000117557&ENSMUST00000117870&ENSMUST00000127699&ENSMUST00000133964&ENSMUST00000138895&ENSMUST00000140984&ENSMUST00000149936&ENSMUST00000153847&NM_031165&uc009ozx.2&uc009ozy.2&uc009ozz.1	0	+
 ```
 
-#### Step 2: Pre_Process on bam files: (must be used if your data is paired-end)
+#### Step 2: Pre_Process on bam files: 
 Preprocessing and downsampling relatively to HS.bam,UN.bam,KCL.bam
-Note: The downsample is performed in a psuedorandom way, if you wand to reproduce the same data again you should keep the order of the input bam as was in the original run.
+
 ```
 Pre_Process -bam HS.bam,UN.bam,KCL.bam -Q 3 -ref loci_annotation.bed
 ```
