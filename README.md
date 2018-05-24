@@ -64,7 +64,7 @@ Note: we provided ready to use annotation files for human and mouse, see annotat
 ####  Step 2: Pre_Process 
 Preprocessing and downsampling of RNA-seq bam files. (Run this command before Get_DoGs)
 
-Note: The downsample is performed in a psuedorandom way, if you wand to reproduce the same data again you should keep the order of the input bam as was in the original run.
+Note: The downsampling is performed using a psuedorandom seed. To reproduce the same downsampled bam files run Pre_process again keeping the order of the input bam files constant.
 
 ##### Command example:	 
 ```
