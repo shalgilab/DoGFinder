@@ -76,9 +76,9 @@ def main():
 		print "Error: No -ref argument"
 		sys.exit()
 
-	sam_strng=commands.getstatusoutput('samtools')
-	temp=sam_strng[1].split("Version:")[1][:7]
-	sam_version=int(filter(str.isdigit, temp))
+	#sam_strng=commands.getstatusoutput('samtools')
+	#temp=sam_strng[1].split("Version:")[1][:7]
+	#sam_version=int(filter(str.isdigit, temp))
 
 	for k in range(0,len(bam_files_names)):
 	    if  not(os.path.isfile(bam_files_names[k])):
