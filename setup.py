@@ -27,7 +27,7 @@ def read(fname):
 setup(name='DoGFinder',
       version='1.0.1',
       description='DoGs pipeline',
-      install_requires=['pybedtools','numpy','pandas','pysam','RSeQC'],
+      install_requires=['pybedtools','numpy','pandas','pysam','RSeQC==2.6.6'],
       scripts=['Get_loci_annotation','Get_DoGs','Get_DoGs_rpkm','Pre_Process','Union_DoGs_annotation','Common_DoGs_annotation'],
       packages=['DoGs_functions','tests','annotations'],
       package_data={'tests': ['data/*'],'annotations': ['*']},
