@@ -7,7 +7,7 @@ DoGFinder-1.0.0
 ## Getting Started
 
 ### Prerequisites
-1. Bedtools: version  2.20.0 or later
+1. Bedtools: version  2.20.0 - 2.26.0
 2. samtools
 3. python 2  with setuptools
 
