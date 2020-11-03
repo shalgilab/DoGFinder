@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/Local/Anaconda-2.0.1-Linux-x86_64/bin/python
 from __future__ import division
 import pybedtools
 import numpy as np
@@ -17,8 +17,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-out', action='store', dest='outpath', help='output dir',type=str)
 parser.add_argument('-bam', action='store', dest='readspath', help='Sorted downsampled bam file ',type=str)
 parser.add_argument('-s', action='store_true', default=False, dest='strand', help='strand specific, default is False')
+parser.add_argument('-S', action='store_true', default=False, dest='strand_opposite', help='opposite strand specific, default is False')
 parser.add_argument('-dog', action='store', dest='annotation', help='DoGs annotation file',type=str)
 parser.add_argument('-suff', action='store', dest='base_name',default='', help='Suffix to add to output file',type=str)
+parser.add_argument('-g', action='store', dest='genome_file_path',default='', help='genome file gor bedtools coverage',type=str)
 
 usr_input = parser.parse_args() 
 
@@ -26,6 +28,7 @@ path_bam=usr_input.readspath
 output_path=usr_input.outpath
 path_annotation=usr_input.annotation
 out_name=usr_input.base_name
+genome_file=usr_input.genome_file_path
 
 if output_path is None:
 	print "Error: No -out argument"
@@ -40,7 +43,8 @@ if path_annotation is None:
 if output_path[-1]=='/'  and len(output_path)>0:
 	output_path=output_path[:-1]
 
-S=usr_input.strand
+s_strand=usr_input.strand
+S_strand=usr_input.strand_opposite
 
 if out_name is not '':
 	out_name='_'+out_name
@@ -61,8 +65,10 @@ print "\n-----------------------------------------------------Get DoGs RPKM-----
 print "\nPath of reads : %s "%(path_bam)
 print "DoGs annotation file: %s "%(path_annotation)
 print "Output will be at: %s/"%(output_path)
-if S:
-	print "Strand specific \n"
+if s_strand:
+	print "Forward strand specific \n"
+elif S_strand:
+	print "Opposite strand specific \n"
 else:
 	print "Not Strand specific \n"
 
@@ -103,9 +109,9 @@ os.remove(genome_path)
 
 #print "Coverage to Count DoGs reads..."
 if version > 2240:
-	annota_cov=annot_sort.coverage(reads,sorted=True,s=S,split=True)
+	annota_cov=annot_sort.coverage(reads,sorted=True,s=s_strand,S=S_strand,split=True,g=genome_file)
 else :
-	annota_cov=reads.coverage(annot_sort,sorted=True,s=S,split=True)
+	annota_cov=reads.coverage(annot_sort,sorted=True,s=s_strand,S=S_strand,split=True,g=genome_file)
 	
 df_cov=pybedtools.BedTool.to_dataframe(annota_cov)
 df_cov.columns=range(0,df_cov.shape[1])
