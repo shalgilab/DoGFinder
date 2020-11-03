@@ -224,9 +224,9 @@ HS.sorted_PE.sorted_DS.bam : This is the downsampled bam file, the one you shoul
 ####  Step 3: Get_DoGs for every bam file
 Find DoGs annotation for every bam file
 ```
-Get_DoGs -out $(pwd) -bam UN.sorted_PE.sorted_DS.bam -suff UN -a loci_annotation.bed
-Get_DoGs -out $(pwd) -bam HS.sorted_PE.sorted_DS.bam -suff HS -a loci_annotation.bed 
-Get_DoGs -out $(pwd) -bam KCL.sorted_PE.sorted_DS.bam -suff KCL -a loci_annotation.bed
+Get_DoGs -out $(pwd) -bam UN.sorted_PE.sorted_DS.bam -suff UN -a loci_annotation.bed -s
+Get_DoGs -out $(pwd) -bam HS.sorted_PE.sorted_DS.bam -suff HS -a loci_annotation.bed -s
+Get_DoGs -out $(pwd) -bam KCL.sorted_PE.sorted_DS.bam -suff KCL -a loci_annotation.bed -s
 ```
 You will get 3 DoG annotation files: Final_Dog_annotation_UN.bed,Final_Dog_annotation_HS.bed,Final_Dog_annotation_KCL.bed
 
@@ -250,9 +250,9 @@ chr9	40613283	40679683	ENSMUST00000015800&ENSMUST00000082857&ENSMUST00000083424&
 #### Step 5: Get_DoGs_rpkm
 Calculate DoGs rpkm for every bam file (you can use also the Final_Dog_annotation files):
 ```
-Get_DoGs_rpkm -out $(pwd) -bam UN.sorted_PE.sorted_DS.bam -s -dog union_dog_annotation.bed -suff UN
-Get_DoGs_rpkm -out $(pwd) -bam HS.sorted_PE.sorted_DS.bam -s -dog union_dog_annotation.bed -suff HS
-Get_DoGs_rpkm -out $(pwd) -bam KCL.sorted_PE.sorted_DS.bam -s -dog union_dog_annotation.bed -suff KCL
+Get_DoGs_rpkm -out $(pwd) -bam UN.sorted_PE.sorted_DS.bam -s -dog union_dog_annotation.bed -suff UN -g genome_file.txt
+Get_DoGs_rpkm -out $(pwd) -bam HS.sorted_PE.sorted_DS.bam -s -dog union_dog_annotation.bed -suff HS -g genome_file.txt
+Get_DoGs_rpkm -out $(pwd) -bam KCL.sorted_PE.sorted_DS.bam -s -dog union_dog_annotation.bed -suff KCL -g genome_file.txt
 ```
 You will get 3 DoG RPKM tables:
 DoGs_rpkm_table_UN.csv,DoGs_rpkm_table_HS.csv,DoGs_rpkm_table_KCL.csv
