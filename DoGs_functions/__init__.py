@@ -216,7 +216,7 @@ def PE_Mod(PE,strand,path_bam,output_path):
 						read.flag=161
 					read.set_tag("XS",'+', replace=True)
 					outfile.write(read)
-			if strand=='first':      
+			if strand=='first' or 'non':      
 				if (Flag==145 or Flag==147 or Flag==153 or Flag==97 or Flag==99  or Flag==73 ):
 					if Flag>100 :
 						read.flag=97
