@@ -19,6 +19,7 @@ parser.add_argument('-out', action='store', dest='outpath', help='output dir',ty
 parser.add_argument('-bam', action='store', dest='readspath', help='sorted bam file path',type=str)
 parser.add_argument('-a', action='store', dest='annotation', help='Annotation file',type=str)
 parser.add_argument('-s', action='store_true', default=False, dest='strand', help='strand specific, default is False')
+parser.add_argument('-S', action='store_true', default=False, dest='strand_opposite', help='opposite strand specific, default is False')
 parser.add_argument('-minDoGLen', action='store', dest='mov0', help='First Coverage Length ,default=4000nt', default=4000,type=int)
 parser.add_argument('-minDoGCov', action='store', dest='cov_cut', help='First Coverage Cutoff, default=0.6', default=0.6,type=float)
 parser.add_argument('-w', action='store', dest='window', help='Running window size, default=200nt', default=200,type=int)
@@ -35,7 +36,8 @@ path_reads_to_run_pipe_on=usr_input.readspath
 output_path=usr_input.outpath
 path_annotation=usr_input.annotation
 out_name=usr_input.suff_name
-S=usr_input.strand
+s_strand=usr_input.strand
+S_strand=usr_input.strand_opposite
 max_dog_length_usr=usr_input.max_dog
 #new_old=usr_input.new_old
 mode=usr_input.mode
@@ -97,8 +99,10 @@ else :
 	sys.exit()
 print "Paremeters: First coverage on: %snt, First coverage cutoff: %s, Running window size: %snt, DoGs end cutoff: %s"%(str(mov0),str(cov_cut),str(interval),str(wind_cut))
 
-if S:
-	print "Strand specific \n"
+if s_strand:
+	print "Forward strand specific \n"
+elif S_strand:
+	print "Opposite strand specific \n"
 else:
 	print "Not Strand specific \n"
 if new_old:
@@ -172,7 +176,7 @@ else :
 		print "Couldn't find non_genic bed file so creating: %s ....may take some time\n" %(bed_name_s_non)
 		if version > 2200:
 			print "Removing genic reads..."
-			reads_for_pipe=reads_for_pipe.intersect(annot,v=True,s=S,split=True);
+			reads_for_pipe=reads_for_pipe.intersect(annot,v=True,s=s_strand,S=S_strand,split=True);
 			reads_out=pybedtools.BedTool.bam_to_bed(reads_for_pipe,split=True).saveas(bed_name_non);
 			print "sorting..."
 			sort_cmd="sort -k1,1 -k2,2n %s > %s" %(bed_name_non,bed_name_s_non);
@@ -181,7 +185,7 @@ else :
 			os.remove(bed_name_non)
 		else:
 			print "Removing genic reads..."
-			reads_for_pipe=reads_for_pipe.intersect(annot,v=True,s=S,abam=True,split=True);
+			reads_for_pipe=reads_for_pipe.intersect(annot,v=True,s=s_strand,S=S_strand,abam=True,split=True);
 			reads_out=pybedtools.BedTool.bam_to_bed(reads_for_pipe,split=True).saveas(bed_name_non);
 			print "sorting..."
 			sort_cmd="sort -k1,1 -k2,2n %s > %s" %(bed_name_non,bed_name_s_non);
@@ -236,12 +240,13 @@ df_dist_from_neighbor_opp=pd.DataFrame(df_nearby_list_opp[12],dtype='int')
 df_dist_from_neighbor=df_dist_from_neighbor.set_index(df_nearby_list[3])
 df_dist_from_neighbor_opp=df_dist_from_neighbor_opp.set_index(df_nearby_list_opp[3])
 
-if S :
+if s_strand or S_strand:
 	df_max_dog_length=pd.DataFrame(df_dist_from_neighbor,dtype='int')
 	df_max_dog_length=df_max_dog_length.set_index(df_dist_from_neighbor.index.values)
 	df_max_dog_length.columns=['size'];
 	df_max_dog_length[df_max_dog_length['size']==-1]=10000000000000000
-else :
+
+else:
 	df_max_dog_length=pd.DataFrame(df_dist_from_neighbor,dtype='int')
 	df_max_dog_length_opp=pd.DataFrame(df_dist_from_neighbor_opp,dtype='int')
 	df_max_dog_length=df_max_dog_length.set_index(df_dist_from_neighbor.index.values)
@@ -252,10 +257,13 @@ else :
 	df_max_dog_length=df_max_dog_length[['size']];
 	df_max_dog_length[df_max_dog_length['size']==-1]=10000000000000000
 
+
 #print "Filter out %s from %s DoGs candidates that have genes %snt down stream to them \n"%(str(len(df_dist_from_neighbor[df_dist_from_neighbor[12]<min_dog])),str(len(df_dist_from_neighbor)),str(min_dog))
 
 
 df_dist_from_neighbor=pd.DataFrame(df_max_dog_length[df_max_dog_length['size']>=min_dog])
+
+
 
 df_dist_from_neighbor.loc[df_dist_from_neighbor['size']>=mov0,'size']=mov0
 
@@ -286,9 +294,9 @@ flank_mov_sort=flank_mov.sort();
 print "First coverage..."
 
 if version > 2240:
-	cov_temp=flank_mov_sort.coverage(reads_for_pipe,sorted=True,s=S);
+	cov_temp=flank_mov_sort.coverage(reads_for_pipe,sorted=True,s=s_strand,S=S_strand);
 else:
-	cov_temp=reads_for_pipe.coverage(flank_mov_sort,sorted=True,s=S);
+	cov_temp=reads_for_pipe.coverage(flank_mov_sort,sorted=True,s=s_strand,S=S_strand);
 
 if len(cov_temp)==0:
 	print "\nNo DoGs Found"
@@ -328,9 +336,9 @@ while len(new_ann)>0:
 	annotation_combine_windows=annotation_combine_windows.sort();
 
 	if version > 2240:
-		annotation_combine_windows_cov=annotation_combine_windows.coverage(reads_for_pipe,sorted=True,s=S)
+		annotation_combine_windows_cov=annotation_combine_windows.coverage(reads_for_pipe,sorted=True,s=s_strand,S=S_strand)
 	else:
-		annotation_combine_windows_cov=reads_for_pipe.coverage(annotation_combine_windows,sorted=True,s=S)
+		annotation_combine_windows_cov=reads_for_pipe.coverage(annotation_combine_windows,sorted=True,s=s_strand,S=S_strand)
 	if (len(annotation_combine_windows)-len(annotation_combine_windows_cov))>0:
 		print "Memory problem with bedtools coverage missing",len(annotation_combine_windows)-len(annotation_combine_windows_cov),"rows"
 	
@@ -375,7 +383,3 @@ if first_len >0:
 	
 else:
 	print "\nNo DoGs Found"
-
-
-
-
