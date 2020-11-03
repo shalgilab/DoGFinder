@@ -5,7 +5,7 @@ Yuval wiesel, Shalgi lab technion
 ## Version
 DoGFinder-1.0.1
 
-Changes done in current version(3/11/20):
+Changes done in current version (3/11/20):
 Adding -S option in Get_DoGs and Get_DoGs_rpkm, 
 Adding -g option in Get_DoGs_rpkm, 
 Adjusting the function PE modification in __init__.py. (Anatoly Meller & Shani Hadar).
