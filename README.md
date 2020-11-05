@@ -82,7 +82,7 @@ Pre_Process -Q 3 -bam rawdata/bam_control1.bam,rawdata/bam_control2.bam,rawdata/
 
 **-ref** Reference .bed gene/transcript annotation file for strandness check (can be loci_annotation.bed file)
 
-**-bam** comma separated bam files
+**-bam** comma separated and sorted bam files
  
 **-Q** number of cores to be used, should be the same as the number of input bam files
 
